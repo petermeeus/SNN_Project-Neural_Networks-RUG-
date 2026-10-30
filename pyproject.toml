@@ -5,6 +5,7 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     "matplotlib",
     "numpy",
+    "pandas",
     "scikit-learn",
     "scipy",
     "snntorch",
