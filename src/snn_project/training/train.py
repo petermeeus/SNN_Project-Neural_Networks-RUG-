@@ -1,11 +1,10 @@
 """Training loop from Tutorial 5."""
 
 import torch
+from snntorch import functional as SF
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-
-from snn_project.utils.device import get_device
 
 
 def train(
@@ -14,38 +13,59 @@ def train(
     test_loader: DataLoader | None = None,
     device: torch.device | str | None = None,
     num_epochs: int = 1,
-    learning_rate: float = 5e-4,
-) -> dict[str, list[float]]:
-    """ Train with summed membrane cross-entropy and optional test batches. """
+    learning_rate: float = 2e-2,
+    test_interval: int = 10,
+) -> dict[str, list]:
+    """Train and record test-batch loss at the first, interval, and final batches."""
     
-    model.to(device)
-    loss_fn = nn.CrossEntropyLoss()
+    if test_interval < 1:
+        raise ValueError("test_interval must be at least 1")
+    loss_fn = SF.mse_count_loss(correct_rate=0.8, incorrect_rate=0.2)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
-    history: dict[str, list[float]] = {"loss_hist": [], "test_loss_hist": []}
+    history: dict[str, list] = {
+        "loss_hist": [],
+        "acc_hist": [],
+        "test_loss_hist": [],
+        "test_steps": [],
+    }
+    test_iterator = None
 
     for epoch in range(num_epochs):
         progress = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", unit="batch")
-        for data, targets in progress:
+        for batch_index, (data, targets) in enumerate(progress):
             data, targets = data.to(device), targets.to(device)
             model.train()
-            _, mem_rec = model(data)
-            loss_val = sum(loss_fn(mem, targets) for mem in mem_rec)
+            spk_rec, _ = model(data)
+            loss_val = loss_fn(spk_rec, targets)
 
             optimizer.zero_grad()
             loss_val.backward()
             optimizer.step()
             batch_loss = loss_val.item()
+            batch_acc = SF.accuracy_rate(spk_rec, targets)
             history["loss_hist"].append(batch_loss)
-            progress.set_postfix(loss=f"{batch_loss:.3f}")
+            history["acc_hist"].append(batch_acc)
+            progress.set_postfix(loss=f"{batch_loss:.3f}, {batch_acc:.1%}")
 
-            if test_loader is not None:
+            step = len(history["loss_hist"])
+            is_last_batch = batch_index + 1 == len(train_loader)
+            if test_loader is not None and (
+                step == 1 or step % test_interval == 0 or is_last_batch
+            ):
                 model.eval()
                 with torch.no_grad():
-                    test_data, test_targets = next(iter(test_loader))
+                    if test_iterator is None:
+                        test_iterator = iter(test_loader)
+                    try:
+                        test_data, test_targets = next(test_iterator)
+                    except StopIteration:
+                        test_iterator = iter(test_loader)
+                        test_data, test_targets = next(test_iterator)
                     test_data = test_data.to(device)
                     test_targets = test_targets.to(device)
-                    _, test_mem = model(test_data)
-                    test_loss = sum(loss_fn(mem, test_targets) for mem in test_mem)
+                    test_spikes, _ = model(test_data)
+                    test_loss = loss_fn(test_spikes, test_targets)
                     history["test_loss_hist"].append(test_loss.item())
+                    history["test_steps"].append(step)
 
     return history

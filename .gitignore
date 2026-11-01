@@ -20,11 +20,18 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Local dataset contents; retain folder placeholders
+# Local datasets; retain documentation and folder placeholders
+/data/*
+!/data/README.md
+!/data/raw/
+!/data/processed/
 /data/raw/*
 !/data/raw/.gitkeep
 /data/processed/*
 !/data/processed/.gitkeep
+
+# Generated dataset caches
+/cache/
 
 # Generated model checkpoints
 /checkpoints/*

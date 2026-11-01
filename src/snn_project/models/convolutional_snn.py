@@ -12,9 +12,8 @@ from torch import nn
 class ConvolutionalSNN(nn.Module):
     """Two convolutional layers and an output layer for 28x28 images."""
 
-    def __init__(self, in_channels: int = 1, conv1_channels: int = 12, conv2_channels: int = 64, num_outputs: int = 10, num_steps: int = 50, beta: float = 0.5, surrogate_slope: float = 25,) -> None:
+    def __init__(self, in_channels: int = 2, conv1_channels: int = 12, conv2_channels: int = 32, num_outputs: int = 10, beta: float = 0.5, surrogate_slope: float = 25,) -> None:
         super().__init__()
-        self.num_steps = num_steps
         self.surrogate_slope = surrogate_slope
         spike_grad = surrogate.fast_sigmoid(slope=surrogate_slope)
 
@@ -22,7 +21,7 @@ class ConvolutionalSNN(nn.Module):
         self.lif1 = snn.Leaky(beta=beta, spike_grad=spike_grad)
         self.conv2 = nn.Conv2d(conv1_channels, conv2_channels, 5)
         self.lif2 = snn.Leaky(beta=beta, spike_grad=spike_grad)
-        self.fc1 = nn.Linear(conv2_channels * 4 * 4, num_outputs)
+        self.fc1 = nn.Linear(conv2_channels * 5 * 5, num_outputs)
         self.lif3 = snn.Leaky(beta=beta, spike_grad=spike_grad)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -32,8 +31,8 @@ class ConvolutionalSNN(nn.Module):
         spk3_rec = []
         mem3_rec = []
 
-        for _ in range(self.num_steps):
-            cur1 = F.max_pool2d(self.conv1(x), 2)
+        for step in range(x.size(0)):
+            cur1 = F.max_pool2d(self.conv1(x[step]), 2)
             spk1, mem1 = self.lif1(cur1, mem1)
             cur2 = F.max_pool2d(self.conv2(spk1), 2)
             spk2, mem2 = self.lif2(cur2, mem2)
@@ -56,7 +55,6 @@ def save_model(model: ConvolutionalSNN, path: str | Path) -> None:
                 "conv1_channels": model.conv1.out_channels,
                 "conv2_channels": model.conv2.out_channels,
                 "num_outputs": model.fc1.out_features,
-                "num_steps": model.num_steps,
                 "beta": model.lif1.beta.item(),
                 "surrogate_slope": model.surrogate_slope,
             },
