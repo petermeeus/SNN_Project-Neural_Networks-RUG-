@@ -1,6 +1,5 @@
 # Training Spiking Neural Networks - NN@RUG
 
-
 ## Setup
 
 Make sure [uv](https://docs.astral.sh/uv/) is installed, then run these commands from the root directory:
@@ -15,18 +14,16 @@ uv run jupyter lab
 
 Activate the venv manually from PowerShell: `.\.venv\Scripts\Activate.ps1`.
 
-
-
 ## Project Structure
 
 ```text
 .
 |-- src/snn_project/          # Importable project code
 |   |-- models/
-|   |   `-- snn.py           # Network architectures and spiking neuron layers
+|   |   `-- feedforward_snn.py # Two-layer spiking network
 |   |-- training/
-|   |   |-- train.py         # Training loops and checkpoint saving
-|   |   `-- evaluate.py      # Evaluation routines and metrics
+|   |   |-- train.py         # Training loop
+|   |   `-- evaluate.py      # Test-set spike-count accuracy
 |   `-- utils/
 |       `-- seed.py          # Random seed and reproducibility helpers
 |-- tests/
@@ -35,6 +32,7 @@ Activate the venv manually from PowerShell: `.\.venv\Scripts\Activate.ps1`.
 |   |-- raw/                 # Original datasets
 |   |-- processed/           # Preprocessed data
 |   `-- README.md            # Dataset sources and preprocessing notes
+|-- checkpoints/             # Saved models
 |-- pyproject.toml           # Project metadata, dependencies, and build backend
 |-- uv.lock                  # Generated dependency lockfile
 |-- .python-version          # Project Python version
@@ -42,7 +40,23 @@ Activate the venv manually from PowerShell: `.\.venv\Scripts\Activate.ps1`.
 `-- .venv/                   # Local environment managed by uv; not tracked
 ```
 
+## Tutorial 5 model
 
+To train on MNIST and evaluate the trained model:
+
+```powershell
+uv run python -m snn_project.main
+```
+
+The script downloads MNIST into `data/raw/` if needed, trains for one epoch, and reports test-set accuracy. It selects CUDA when available, otherwise CPU. The seed, batch size, and epoch count are set at the top of `main()`. After training, the script saves the model under `checkpoints/` with a unique timestamp. Checkpoint files are ignored by Git. 
+
+The file contains model settings and parameters; optimizer state is not saved. To load a saved model:
+
+```python
+from snn_project.models.feedforward_snn import load_model
+
+model = load_model("checkpoints/<filename>.pt", device="cpu")
+```
 
 ## Dependencies
 
