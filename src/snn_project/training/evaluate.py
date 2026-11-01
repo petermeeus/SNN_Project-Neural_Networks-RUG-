@@ -14,25 +14,31 @@ def evaluate(
     model: nn.Module,
     test_loader: DataLoader,
     device: torch.device | str | None = None,
-    history: dict[str, list] | None = None,
+    history: dict | None = None,
     figure_dir: str | Path | None = None,
-) -> float:
-    """Evaluate every test example and optionally save plots and an animation."""
+    return_metrics: bool = False,
+) -> float | dict[str, float]:
+    """Evaluate all examples; optionally return accuracy and output spikes/example.
+
+    Spike counts include padded timesteps and measure output activity, not energy.
+    """
 
     model.to(device)
     model.eval()
     total = 0
     correct = 0
+    output_spikes = 0.0
     example_spikes = None
     example_target = None
 
     with torch.no_grad():
         for data, targets in test_loader:
-            data, targets = data.to(device), targets.to(device)
+            data, targets = data.to(device, dtype=torch.float32), targets.to(device)
             spikes, _ = model(data)
             if figure_dir is not None and example_spikes is None:
                 example_spikes = spikes[:, 0].detach().cpu()
                 example_target = targets[0].item()
+            output_spikes += spikes.sum().item()
             predicted = spikes.sum(dim=0).argmax(dim=1)
             total += targets.size(0)
             correct += (predicted == targets).sum().item()
@@ -45,6 +51,11 @@ def evaluate(
         if history is not None:
             plot_history(history, figure_dir)
         save_spike_count(example_spikes, example_target, figure_dir)
+    if return_metrics:
+        return {
+            "accuracy": correct / total,
+            "output_spikes_per_sample": output_spikes / total,
+        }
     return correct / total
 
 
@@ -56,12 +67,12 @@ def plot_history(history: dict[str, list], figure_dir: Path) -> None:
         history["loss_hist"],
         label="Train loss",
     )
-    if history["test_loss_hist"]:
+    if history["validation_loss_hist"]:
         ax.plot(
-            history["test_steps"],
-            history["test_loss_hist"],
+            history["validation_steps"],
+            history["validation_loss_hist"],
             "o-",
-            label="Test loss (batch)",
+            label="Validation loss (batch)",
         )
     ax.set(title="Loss curves", xlabel="Training batch", ylabel="Spike-count loss")
     ax.legend()
