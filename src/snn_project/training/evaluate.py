@@ -4,9 +4,14 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
+from snn_project.utils.device import get_device
 
-def evaluate(model: nn.Module, test_loader: DataLoader, device: torch.device | str = "cpu") -> float:
+
+def evaluate(
+    model: nn.Module, test_loader: DataLoader, device: torch.device | str | None = None
+) -> float:
     """Return accuracy over all test examples, including a partial last batch."""
+    
     model.to(device)
     model.eval()
     total = 0

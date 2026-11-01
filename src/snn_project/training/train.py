@@ -5,12 +5,14 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
+from snn_project.utils.device import get_device
+
 
 def train(
     model: nn.Module,
     train_loader: DataLoader,
     test_loader: DataLoader | None = None,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | None = None,
     num_epochs: int = 1,
     learning_rate: float = 5e-4,
 ) -> dict[str, list[float]]:

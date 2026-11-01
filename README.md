@@ -25,6 +25,7 @@ Activate the venv manually from PowerShell: `.\.venv\Scripts\Activate.ps1`.
 |   |   |-- train.py         # Training loop
 |   |   `-- evaluate.py      # Test-set spike-count accuracy
 |   `-- utils/
+|       |-- device.py        # Choose GPU or CPU
 |       `-- seed.py          # Random seed and reproducibility helpers
 |-- tests/
 |   `-- test_dependencies.py # Checks if prebuilt LIF neuron and packages are working
@@ -48,7 +49,7 @@ To train on MNIST and evaluate the trained model:
 uv run python -m snn_project.main
 ```
 
-The script downloads MNIST into `data/raw/` if needed, trains for one epoch, and reports test-set accuracy. It selects CUDA when available, otherwise CPU. The seed, batch size, and epoch count are set at the top of `main()`. After training, the script saves the model under `checkpoints/` with a unique timestamp. Checkpoint files are ignored by Git. 
+The script downloads MNIST into `data/raw/` if needed, trains for one epoch, and reports test-set accuracy. It selects CUDA when available, then MPS, otherwise CPU. The seed, batch size, and epoch count are set at the top of `main()`. After training, the script saves the model under `checkpoints/` with a unique timestamp. Checkpoint files are ignored by Git. On Windows, uv installs CUDA 13.0 builds of PyTorch and torchvision. Training and evaluation select an available GPU by default and accept an explicit`device` argument when needed.
 
 The file contains model settings and parameters; optimizer state is not saved. To load a saved model:
 

@@ -10,6 +10,7 @@ from torchvision import datasets, transforms
 from snn_project.models.feedforward_snn import FeedForwardSNN, save_model
 from snn_project.training.evaluate import evaluate
 from snn_project.training.train import train
+from snn_project.utils.device import get_device
 from snn_project.utils.seed import set_seed
 
 
@@ -19,8 +20,10 @@ def main() -> None:
     num_epochs = 1
     data_path = Path(__file__).resolve().parents[2] / "data" / "raw"
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    device = get_device()
     print(f"Using device: {device}", flush=True)
+    if device.type == "cuda":
+        print(f"GPU: {torch.cuda.get_device_name(device)}", flush=True)
 
     transform = transforms.Compose([
             transforms.Resize((28, 28)),
