@@ -1,0 +1,22 @@
+{
+  "checkpoint": "C:\\Users\\willm\\Projects\\University\\RUG-Work\\Neural Networks\\SNN_Project-Neural_Networks-RUG-\\checkpoints\\convolutional_snn_20261101-203227-177377_seed2.pt",
+  "device": "cuda",
+  "samples": 10000,
+  "batch_size": 128,
+  "noise_seeds": [
+    0,
+    1,
+    2
+  ],
+  "noise_levels": [
+    0.0,
+    0.1,
+    0.25,
+    0.5,
+    0.75
+  ],
+  "input_noise": "event deletion after denoising",
+  "internal_noise": "outgoing spike deletion, no rescaling, membrane unchanged",
+  "padding": "same sample order/batches and durations at every noise level; padded steps included",
+  "variation": "sample SD across noise masks for one fixed trained checkpoint"
+}

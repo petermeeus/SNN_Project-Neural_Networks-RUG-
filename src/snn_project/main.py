@@ -27,7 +27,7 @@ def main() -> None:
     num_epochs = 5
     seeds = (0, 1, 2)
     split_seed = 0
-    val_candidates = ((0.001, 0.5), (0.01, 0.5), (0.001, 0.9))
+    val_candidates = ((0.001, 0.5), (0.01, 0.5), (0.001, 0.9), (0.01, 0.9))
 
     root_path = Path(__file__).resolve().parents[2]
     data_path = root_path / "data"

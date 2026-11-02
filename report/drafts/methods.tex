@@ -1,0 +1,143 @@
+\section{Methods and Experiments}
+\label{sec:methods}
+
+The preprocessing described in Section~2 converts each recording into a sequence of event-count frames. Our network processes these frames one at a time, retaining membrane state between time steps. We first describe the neuron dynamics and their training, then specify the convolutional architecture, model-selection procedure, and spike-loss experiment. This follows the progression of the snnTorch tutorials while documenting the settings used in our implementation.
+
+\subsection{Leaky integrate-and-fire dynamics}
+
+A conventional artificial neuron transforms a weighted input into an activation. A leaky integrate-and-fire (LIF) neuron additionally maintains a membrane potential, allowing earlier inputs to influence its response to later ones. Incoming current changes the potential, leakage reduces retained activity, and crossing a threshold produces a binary spike. The potential is then reduced by a reset mechanism. These operations provide temporal memory without requiring learned recurrent connections between neurons.
+
+The circuit interpretation is a resistor and capacitor in parallel. For membrane potential $U(t)$ relative to rest, input current $I(t)$, resistance $R$, and capacitance $C$, the subthreshold dynamics are
+\begin{equation}
+    \tau \frac{dU(t)}{dt} = -U(t) + RI(t),
+    \qquad \tau = RC.
+    \label{eq:lif-circuit}
+\end{equation}
+The leak is proportional to the potential: when input stops, the potential decays exponentially toward rest. A Forward Euler approximation motivates a discrete retention factor $\beta \approx 1-\Delta t/\tau$, where $\Delta t$ is the time-step duration. In the network, we set $\beta$ directly rather than estimating physical circuit parameters \citep{snntorchTutorial2}.
+
+Our implementation uses snnTorch's \texttt{Leaky} neuron. Its binary spike output is
+\begin{equation}
+    S[t] =
+    \begin{cases}
+        1, & U[t] > U_{\mathrm{thr}},\\
+        0, & \text{otherwise},
+    \end{cases}
+    \label{eq:spike-threshold}
+\end{equation}
+where $U_{\mathrm{thr}}$ is the firing threshold. With the default delayed reset by subtraction, the membrane update is
+\begin{equation}
+    \begin{aligned}
+        U[t+1] &= \beta U[t] + I[t+1]\\
+               &\quad - R[t]U_{\mathrm{thr}},\\
+        R[t] &= H\!\left(U[t]-U_{\mathrm{thr}}\right),
+    \end{aligned}
+    \label{eq:lif-update}
+\end{equation}
+where $H(z)$ equals one for $z>0$ and zero otherwise. The current $I[t+1]$ comes from the preceding weighted operation. The reset indicator $R[t]$ is calculated from the membrane potential; in an unperturbed neuron it equals the emitted spike. Keeping these quantities distinct matters for our later experiment, where an outgoing spike can be suppressed without changing the membrane.
+
+We used threshold $U_{\mathrm{thr}}=1$. Membrane states were initialized to zero for each model forward pass and retained across its time steps. Larger $\beta$ retains more previous activity. Reset by subtraction removes one threshold value at the next update, allowing overshoot to remain; it does not change the threshold itself. The implementation detaches the reset indicator from gradient computation.
+
+\subsection{Surrogate gradients and training objective}
+
+The hard threshold in Equation~\eqref{eq:spike-threshold} creates a learning problem: its derivative is zero away from the threshold and undefined at the threshold. Direct differentiation would therefore provide no useful gradient for most membrane values. Surrogate-gradient learning retains the hard spike during the forward pass but substitutes a smooth derivative during backpropagation \citep{snntorchTutorial6}.
+
+For the membrane offset $z=U-U_{\mathrm{thr}}$, we used the fast-sigmoid surrogate
+\begin{equation}
+    \frac{\partial S}{\partial U}
+    \approx \frac{1}{(1+k|z|)^2},
+    \qquad k=25.
+    \label{eq:surrogate}
+\end{equation}
+This provides a gradient around the threshold, allowing weight updates to move neurons toward or away from firing. It is an approximation for training, not a replacement of the binary forward output. Since each membrane update depends on earlier states, gradients must also follow those dependencies backward through time. PyTorch performs this backpropagation through the unrolled sequence \citep{snntorchTutorial5}.
+
+Training should make the correct output neuron accumulate more spikes than its competitors. For example $b$ and class $c$, define the output count as
+\begin{equation}
+    N_{b,c} = \sum_{t=1}^{T} S^{\mathrm{out}}_{b,c}[t],
+    \label{eq:output-count}
+\end{equation}
+where $T$ is the padded batch length. Our spike-count mean squared error loss assigns target counts
+\begin{equation}
+    N^{*}_{b,c} =
+    \begin{cases}
+        \lfloor 0.8T \rfloor, & c=y_b,\\
+        \lfloor 0.2T \rfloor, & c\ne y_b,
+    \end{cases}
+\end{equation}
+where $y_b$ is the true digit. Thus incorrect classes are encouraged to fire less often, rather than remain completely silent. For batch size $B$ and $K=10$ classes, the installed loss implementation gives
+\begin{equation}
+    \mathcal{L} =
+    \frac{1}{BKT}
+    \sum_{b=1}^{B}\sum_{c=0}^{K-1}
+    \left(N_{b,c}-N^{*}_{b,c}\right)^2.
+    \label{eq:count-loss}
+\end{equation}
+This averages squared count errors over examples and classes, then divides by the number of time steps.
+
+We trained for five epochs with batches of up to 128 recordings. Each update cleared previous gradients, computed the loss, backpropagated through the sequence, and updated the weights using Adam. Adam's moving-average coefficients were $(0.9,0.999)$. Learning rate and membrane decay were selected using validation data; the surrogate slope and threshold remained fixed. No early stopping or learning-rate schedule was used.
+
+\subsection{Convolutional architecture and readout}
+
+The network applies the same spatial operations at every time step. The first convolution uses twelve $5\times5$ filters on the two polarity channels. Shared weights allow each filter to respond to a local pattern at different positions. Max pooling reduces the spatial dimensions, and LIF neurons convert the pooled currents into spike maps. A second convolution, pooling operation, and LIF layer transform these maps into the final hidden representation. Pooling precedes the LIF operation in both blocks.
+
+The second hidden layer is flattened into 800 values and connected to ten output LIF neurons, one per digit. Table~\ref{tab:csnn-architecture} specifies the dimensions. The design follows the convolutional and event-data examples in snnTorch \citep{snntorchTutorial6,snntorchTutorial7}.
+
+\begin{table}[tb]
+    \centering
+    \small
+    \caption{CSNN operations and output dimensions for one example at one time step. All learned layers include biases.}
+    \label{tab:csnn-architecture}
+    \begin{tabular}{@{}ll@{}}
+        \toprule
+        Operation & Output shape\\
+        \midrule
+        Input & $2\times34\times34$\\
+        $5\times5$ convolution, 12 filters & $12\times30\times30$\\
+        $2\times2$ max pooling; LIF & $12\times15\times15$\\
+        $5\times5$ convolution, 32 filters & $32\times11\times11$\\
+        $2\times2$ max pooling; LIF & $32\times5\times5$\\
+        Flatten & $800$\\
+        Fully connected; output LIF & $10$\\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The connections between layers are feedforward, while membrane states provide temporal dependence within each layer. After the complete sequence, the predicted class is
+\begin{equation}
+    \hat{y}_b = \arg\max_{c} N_{b,c}.
+\end{equation}
+These counts are decision scores, not calibrated probabilities. If counts tie, the implementation selects the first maximum. Classification includes padded steps, as does the training loss. This is relevant because membrane state and learned biases can produce activity even when a padded input frame contains only zeros.
+
+\subsection{Model selection and evaluation}
+
+We used the fixed training and validation subsets described in Section~2. In the completed training run, three learning-rate/decay pairs were evaluated: $(0.001,0.5)$, $(0.01,0.5)$, and $(0.001,0.9)$. Each candidate used training seed~0, the same split, and five epochs. Learning rate controls the size of weight updates, while $\beta$ controls temporal retention. This small search examined both choices within a limited computation budget.
+
+The final accuracy on all 6,000 validation recordings selected the configuration. Training also recorded loss on a successive validation batch at the first training batch, every ten batches, and the final batch of each epoch. Those monitoring points are individual batch measurements, not complete validation-set losses.
+
+We retained the selected seed-0 model and trained two fresh models with the selected settings using seeds~1 and~2. All three used the original training subset, without adding validation samples back into training. The same 10,000 unaugmented official test recordings were used for final evaluation, with gradients disabled. We report the mean accuracy and sample standard deviation across these three models. These summarize training variation for one fixed split; they do not represent uncertainty across different data splits.
+
+The implementation also records training wall time, including data loading and validation monitoring, and output spikes per presentation. The latter sums output spikes across neurons and time, including padded steps. It measures output activity rather than total network activity or energy consumption.
+
+\subsection{Experiment: event and spike suppression}
+
+We used the selected seed-0 checkpoint to study fault tolerance without retraining. Separate experiments removed input events, outgoing first-hidden-layer spikes, or outgoing second-hidden-layer spikes. Only one location was perturbed at a time. Removal probabilities were $0$, $0.1$, $0.25$, $0.5$, $0.75$, $0.85$, $0.9$, $0.95$, $0.975$, and $0.99$.
+
+For input noise, removal was applied after the denoising and binning described in Section~2. If a pixel and polarity contain $n$ events in a time bin, the retained count is
+\begin{equation}
+    \widetilde{n}\sim\operatorname{Binomial}(n,1-p),
+\end{equation}
+where $p$ is removal probability. This independently deletes events without discarding entire occupied pixels. It preserves the original bin alignment and sequence duration.
+
+For hidden-layer noise, the transmitted spike of neuron $j$ at time $t$ becomes
+\begin{equation}
+    \begin{aligned}
+        \widetilde{S}_{j}[t] &= M_j[t]S_j[t],\\
+        M_j[t] &\sim \operatorname{Bernoulli}(1-p).
+    \end{aligned}
+\end{equation}
+Masks are sampled independently for each neuron, example, and time step. Surviving spikes are not rescaled. This models intermittent transmission failures rather than permanently silencing neurons.
+
+A forward hook applies the mask after the chosen LIF layer computes its output. It passes modified spikes to the following layer but preserves the membrane potential. Consequently, the emitting neuron still undergoes its usual delayed reset through $R[t]$ in Equation~\eqref{eq:lif-update}, even when its transmitted spike is zero. The hook is removed after each forward pass.
+
+All conditions use the same ordered test recordings and batch size~128. We perform one evaluation per condition, using fixed randomness for reproducibility, and include a clean condition at each location. Therefore, the noise curves contain single accuracy measurements rather than means over multiple noise realizations. Both the input and hidden experiments retain the original batch padding.
+
+For each condition, we additionally record the first test example during the evaluation pass. Synchronized animations show both input polarities, the hidden feature maps, and accumulating output counts. Four stacked rasters show the input, first hidden layer, second hidden layer, and output on a common time axis. Spatial positions and channels are flattened into neuron indices; an input dot indicates at least one event in that bin, without displaying multiplicity. These visualizations illustrate the propagation of the perturbation, while dataset-wide accuracy provides the quantitative comparison.
