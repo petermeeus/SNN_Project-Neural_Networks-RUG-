@@ -7,14 +7,11 @@ from statistics import mean, stdev
 
 import tonic
 import tonic.transforms as tonictransforms
-from tonic import DiskCachedDataset
-from tonic import MemoryCachedDataset
-
 import torch
 import torchvision
-from torch.utils.data import DataLoader
-from torch.utils.data import Subset
-from torchvision import datasets, transforms
+from tonic import DiskCachedDataset
+from torch.utils.data import DataLoader, Subset
+from torchvision import transforms
 
 #from snn_project.models.feedforward_snn import FeedForwardSNN, save_model
 from snn_project.models.convolutional_snn import ConvolutionalSNN, save_model
@@ -27,15 +24,17 @@ from snn_project.utils.seed import set_seed
 
 def main() -> None:
     batch_size = 128
-    num_epochs = 1
+    num_epochs = 5
     seeds = (0, 1, 2)
     split_seed = 0
     val_candidates = ((0.001, 0.5), (0.01, 0.5), (0.001, 0.9))
 
     root_path = Path(__file__).resolve().parents[2]
-    data_path = root_path / "data" / "raw"
+    data_path = root_path / "data"
     cache_path = root_path / "cache" / "nmnist" / "denoise10000_frames1000_complete"
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     figure_dir = root_path / "report" / "figures" / timestamp
+    figure_dir.mkdir(parents=True, exist_ok=True)
 
     device = get_device()
     print(f"Using device: {device}", flush=True)
@@ -73,7 +72,6 @@ def main() -> None:
 
     validation_loader = make_loader(Subset(validation_frames, validation_indices))
     test_loader = make_loader(test_frames)
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")  
     (figure_dir / "splits.json").write_text(
             json.dumps(
                     {
@@ -92,7 +90,7 @@ def main() -> None:
         set_seed(seeds[0])
         model = ConvolutionalSNN(beta=beta).to(device)
         
-        print(f"Training on {len(training_frames)} images for {num_epochs} epoch(s)...", flush=True)
+        print(f"Training on {len(train_indices)} images for {num_epochs} epoch(s)...", flush=True)
         history = train(
             model,
             make_loader(Subset(training_frames, train_indices), True, seeds[0]),
@@ -102,7 +100,7 @@ def main() -> None:
             learning_rate=learning_rate,
         )
 
-        print(f"Evaluating on {len(test_frames)} images...", flush=True)
+        print(f"Evaluating on {len(validation_indices)} validation images...", flush=True)
         accuracy = evaluate(model, validation_loader, device=device)
         validation_results.append(
             {
@@ -138,6 +136,8 @@ def main() -> None:
                 learning_rate=learning_rate,
             )
 
+        checkpoint = (root_path / "checkpoints" / f"convolutional_snn_{timestamp}_seed{seed}.pt")
+        save_model(model, checkpoint)
         metrics = evaluate(
             model,
             test_loader,
@@ -158,8 +158,6 @@ def main() -> None:
             }
         )
 
-        checkpoint = (root_path / "checkpoints" / f"convolutional_snn_{timestamp}_seed{seed}.pt")
-        save_model(model, checkpoint)
         print(f"Seed {seed}: {results[-1]}", flush=True)
         model.cpu()
 

@@ -6,6 +6,7 @@ venv/
 !.env.example
 
 # Python caches, tests, and builds
+/tests/
 __pycache__/
 *.py[cod]
 .pytest_cache/

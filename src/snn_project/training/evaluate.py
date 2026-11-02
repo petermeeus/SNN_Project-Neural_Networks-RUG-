@@ -3,6 +3,10 @@
 from pathlib import Path
 
 import imageio_ffmpeg
+import matplotlib
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import snntorch.spikeplot as splt
 import torch

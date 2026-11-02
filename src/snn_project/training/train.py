@@ -16,18 +16,18 @@ def train(
     device: torch.device | str | None = None,
     num_epochs: int = 1,
     learning_rate: float = 2e-2,
-    test_interval: int = 10,
-) -> dict[str, list]:
+    validation_interval: int = 10,
+) -> dict:
     """Train and record validation batches. 
     Wall time is recorded for data loading and validation monitoring.
     Output activity counts spikes per presentation, including for the padded timesteps.
     """
     
-    if test_interval < 1:
-        raise ValueError("test_interval must be at least 1")
+    if validation_interval < 1 or num_epochs < 1:
+        raise ValueError("validation_interval and num_epochs must be at least 1")
     loss_fn = SF.mse_count_loss(correct_rate=0.8, incorrect_rate=0.2)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
-    history: dict[str, list] = {
+    history = {
         "loss_hist": [],
         "acc_hist": [],
         "validation_loss_hist": [],
@@ -85,6 +85,8 @@ def train(
                     history["validation_loss_hist"].append(validation_loss.item())
                     history["validation_steps"].append(step)
     
+    if not total_examples:
+        raise ValueError("The training loader has no examples.")
     synchronize()
     history["training_seconds"] = perf_counter() - start
     history["training_output_spikes_per_sample"] = total_spikes / total_examples

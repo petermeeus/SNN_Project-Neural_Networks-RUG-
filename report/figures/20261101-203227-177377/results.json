@@ -1,0 +1,51 @@
+{
+  "learning_rate": 0.01,
+  "beta": 0.5,
+  "epochs": 5,
+  "batch_size": 128,
+  "split_seed": 0,
+  "validation_runs": [
+    {
+      "learning_rate": 0.001,
+      "beta": 0.5,
+      "accuracy": 0.953
+    },
+    {
+      "learning_rate": 0.01,
+      "beta": 0.5,
+      "accuracy": 0.9745
+    },
+    {
+      "learning_rate": 0.001,
+      "beta": 0.9,
+      "accuracy": 0.9531666666666667
+    }
+  ],
+  "test_runs": [
+    {
+      "seed": 0,
+      "accuracy": 0.9777,
+      "output_spikes_per_sample": 763.9071,
+      "training_seconds": 2648.099936200015,
+      "training_output_spikes_per_sample": 795.8178666666666
+    },
+    {
+      "seed": 1,
+      "accuracy": 0.9789,
+      "output_spikes_per_sample": 754.7857,
+      "training_seconds": 2652.1440678999934,
+      "training_output_spikes_per_sample": 796.6990222222222
+    },
+    {
+      "seed": 2,
+      "accuracy": 0.9757,
+      "output_spikes_per_sample": 777.6171,
+      "training_seconds": 2658.328365100024,
+      "training_output_spikes_per_sample": 794.5900740740741
+    }
+  ],
+  "test_accuracy_mean": 0.9774333333333334,
+  "test_accuracy_std": 0.0016165807537309436,
+  "training_seconds_mean": 2652.8574564000105,
+  "output_spikes_per_sample_mean": 765.4366333333334
+}
